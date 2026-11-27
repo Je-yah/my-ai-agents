@@ -21,8 +21,6 @@ DEV_NOTES_REPO="<github-owner>/<repository>"
 OBSIDIAN_BLOG_DIR="$HOME/Documents/Obsidian Vault/Blog"
 WEEKLY_REPORT_DIR="$HOME/Documents/Weekly Reports"
 
-SLACK_BRIEFING_CHANNEL="#briefing"
-
 NOTICE_SOURCE_1_LABEL="Department"
 NOTICE_SOURCE_1_URL="https://example.edu/notices"
 NOTICE_SOURCE_1_LIMIT="5"
