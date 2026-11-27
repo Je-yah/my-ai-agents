@@ -42,79 +42,79 @@ AppleScript로 오늘~6일 후(7일치) 일정을 가져온다. Calendar 앱을 
 
 ```bash
 osascript << 'APPLESCRIPT'
+with timeout of 45 seconds
 tell application "Calendar"
-    -- startOfToday를 초 단위 덧셈으로 계산해 AppleScript date 참조 버그 회피
     set startOfToday to current date
     set hours of startOfToday to 0
     set minutes of startOfToday to 0
     set seconds of startOfToday to 0
+    set endOfPeriod to startOfToday + (6 * 24 * 3600 + 23 * 3600 + 59 * 60 + 59)
 
     set skipCals to {"생일", "대한민국의 휴일", "Holidays in South Korea", "대한민국 공휴일", "Siri 제안", "예정된 미리 알림"}
     set seen to {}
     set output to ""
 
-    repeat with dayOffset from 0 to 6
-        set dayStart to startOfToday + (dayOffset * 24 * 3600)
-        set dayEnd to dayStart + (23 * 3600 + 59 * 60 + 59)
+    -- 캘린더당 7일치 이벤트를 한 번에 조회 (기존 7일×13캘린더=91회 → 13회로 감소)
+    repeat with cal in calendars
+        set calName to name of cal
+        set skip to false
+        repeat with sc in skipCals
+            if calName is sc then set skip to true
+        end repeat
+        if not skip then
+            try
+                set allEvents to (every event of cal whose start date >= startOfToday and start date <= endOfPeriod)
+                repeat with ev in allEvents
+                    set evStart to start date of ev
+                    set evTitle to summary of ev
+                    set dayOffset to ((evStart - startOfToday) div 86400)
 
-        -- 날짜 레이블 결정
-        if dayOffset = 0 then
-            set dayLabel to "오늘"
-        else if dayOffset = 1 then
-            set dayLabel to "내일"
-        else
-            set wd to weekday of dayStart
-            if wd = Monday then
-                set dayLabel to "월"
-            else if wd = Tuesday then
-                set dayLabel to "화"
-            else if wd = Wednesday then
-                set dayLabel to "수"
-            else if wd = Thursday then
-                set dayLabel to "목"
-            else if wd = Friday then
-                set dayLabel to "금"
-            else if wd = Saturday then
-                set dayLabel to "토"
-            else
-                set dayLabel to "일"
-            end if
-        end if
+                    set dedupKey to (dayOffset as string) & ":" & evTitle
+                    if dedupKey is not in seen then
+                        set end of seen to dedupKey
 
-        repeat with cal in calendars
-            set calName to name of cal
-            set skip to false
-            repeat with sc in skipCals
-                if calName is sc then set skip to true
-            end repeat
-            if not skip then
-                try
-                    set dayEvents to (every event of cal whose start date >= dayStart and start date <= dayEnd)
-                    repeat with ev in dayEvents
-                        set evTitle to summary of ev
-                        set dedupKey to (dayOffset as string) & ":" & evTitle
-                        if dedupKey is not in seen then
-                            set end of seen to dedupKey
-                            set evStart to start date of ev
-                            set hh to hours of evStart
-                            set mm to minutes of evStart
-                            if hh = 0 and mm = 0 then
-                                set output to output & "[" & dayLabel & "] 종일  " & evTitle & "
-"
+                        if dayOffset = 0 then
+                            set dayLabel to "오늘"
+                        else if dayOffset = 1 then
+                            set dayLabel to "내일"
+                        else
+                            set wd to weekday of evStart
+                            if wd = Monday then
+                                set dayLabel to "월"
+                            else if wd = Tuesday then
+                                set dayLabel to "화"
+                            else if wd = Wednesday then
+                                set dayLabel to "수"
+                            else if wd = Thursday then
+                                set dayLabel to "목"
+                            else if wd = Friday then
+                                set dayLabel to "금"
+                            else if wd = Saturday then
+                                set dayLabel to "토"
                             else
-                                set output to output & "[" & dayLabel & "] " & (hh as string) & ":" & text -2 thru -1 of ("0" & (mm as string)) & "  " & evTitle & "
-"
+                                set dayLabel to "일"
                             end if
                         end if
-                    end repeat
-                end try
-            end if
-        end repeat
+
+                        set hh to hours of evStart
+                        set mm to minutes of evStart
+                        if hh = 0 and mm = 0 then
+                            set output to output & "[" & dayLabel & "] 종일  " & evTitle & "
+"
+                        else
+                            set output to output & "[" & dayLabel & "] " & (hh as string) & ":" & text -2 thru -1 of ("0" & (mm as string)) & "  " & evTitle & "
+"
+                        end if
+                    end if
+                end repeat
+            end try
+        end if
     end repeat
 
     if output is "" then return "(일정 없음)"
     return output
 end tell
+end timeout
 APPLESCRIPT
 ```
 
@@ -263,30 +263,6 @@ Gmail MCP로 오늘 미읽음 메일을 조회한다.
 - 발신자: 제목 요약
 ```
 (최대 5건 표시. 5건 초과 시 마지막에 "외 N건" 추가)
-
----
-
-## 5단계: Slack 수집
-
-Slack MCP로 미읽음 메시지를 조회한다.
-
-`slack_search_public_and_private` 툴을 사용. 쿼리: `is:unread`
-
-결과를 SLACK_DATA 변수로 기억한다:
-- channels: [{name: "#채널명 또는 @DM발신자", summary: "메시지 요약"}] (최대 5건)
-- status: "ok" / "error" / "empty"
-
-**에러 처리:**
-- MCP 호출 실패 시: SLACK_DATA = {status: "error"}. 브리핑 조립 시 `⚠️ Slack 데이터 수집 실패` 출력
-- 결과가 없으면: SLACK_DATA = {status: "empty"}. 브리핑 조립 시 `💬 Slack\n- (미읽음 없음)` 출력
-
-성공 시 포맷:
-```
-💬 Slack
-- #채널명: 메시지 요약
-- @DM발신자: 메시지 요약
-```
-(최대 5건 표시. 초과 시 "외 N건" 추가)
 
 ---
 
@@ -631,12 +607,6 @@ NOTION_TASKS.status가 "empty"이면: `🟢 LOW — 할 일 없음`
 ## 📬 이메일
 {GMAIL_DATA.status가 ok이면: **미읽음 {N}건**}
 {스레드 목록: `- **발신자** — 제목`}
-{없으면: _미읽음 없음_}
-
----
-
-## 💬 Slack
-{채널/DM 목록: `- **#채널명** — 메시지 요약`}
 {없으면: _미읽음 없음_}
 
 ---
